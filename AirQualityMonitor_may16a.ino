@@ -34,6 +34,28 @@ DHT dht(DHT_PIN, DHTTYPE);
 #define AIR_QUALITY_GOOD 800
 #define AIR_QUALITY_MODERATE 1200
 
+// Predictive Analysis
+#define HISTORY_SIZE 450  // Store 15 minutes of data (450 readings at 2-second intervals)
+#define PREDICTION_WINDOW 900  // Predict 15 minutes ahead (900 seconds)
+#define TREND_WINDOW 30  // Use last 30 points for trend analysis
+
+// Historical data storage
+float airQualityHistory[HISTORY_SIZE];
+unsigned long timeHistory[HISTORY_SIZE];
+int historyIndex = 0;
+bool historyFull = false;
+
+// Prediction variables
+float prediction = 0;
+float trendSlope = 0;
+float shortTermAverage = 0;
+float longTermAverage = 0;
+
+
+// Track previous ventilation speed
+String previousVentilationSpeed = "off";
+bool speedChanged = false;
+
 
 // Reading intervals
 unsigned long previousMillis = 0;
@@ -102,13 +124,19 @@ void loop() {
     // Read sensors
     readSensors();
     
+    // Store historical data
+    storeHistoricalData();
+    
+    // Update prediction
+    updatePrediction();
+    
     // Update display
     updateDisplay();
     
     // Update RGB indicator
     updateRGBIndicator();
     
-    // Control ventilation based on air quality
+    // Control ventilation based on air quality and prediction
     controlVentilation();
   }
 }
@@ -183,6 +211,88 @@ void readSensors() {
   Serial.println(" ppm CO2 eq.");
 }
 
+void storeHistoricalData() {
+  // Store current air quality and time
+  airQualityHistory[historyIndex] = airQuality;
+  timeHistory[historyIndex] = millis();
+  
+  // Update index
+  historyIndex = (historyIndex + 1) % HISTORY_SIZE;
+  if (historyIndex == 0) {
+    historyFull = true;
+  }
+}
+
+void updatePrediction() {
+  if (!historyFull && historyIndex < TREND_WINDOW) {
+    return;  // Need enough data points for prediction
+  }
+  
+  // Calculate short-term and long-term averages
+  float shortTermSum = 0;
+  float longTermSum = 0;
+  int shortTermCount = 0;
+  int longTermCount = 0;
+  
+  // Calculate averages using the most recent data
+  int currentIndex = (historyIndex - 1 + HISTORY_SIZE) % HISTORY_SIZE;
+  for (int i = 0; i < HISTORY_SIZE; i++) {
+    int index = (currentIndex - i + HISTORY_SIZE) % HISTORY_SIZE;
+    if (i < TREND_WINDOW) {
+      shortTermSum += airQualityHistory[index];
+      shortTermCount++;
+    }
+    if (i < HISTORY_SIZE) {
+      longTermSum += airQualityHistory[index];
+      longTermCount++;
+    }
+  }
+  
+  shortTermAverage = shortTermSum / shortTermCount;
+  longTermAverage = longTermSum / longTermCount;
+  
+  // Calculate trend using linear regression on recent data
+  float sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
+  for (int i = 0; i < TREND_WINDOW; i++) {
+    int index = (currentIndex - i + HISTORY_SIZE) % HISTORY_SIZE;
+    float x = i;  // Use relative time
+    float y = airQualityHistory[index];
+    sumX += x;
+    sumY += y;
+    sumXY += x * y;
+    sumX2 += x * x;
+  }
+  
+  // Calculate slope and intercept
+  // Calculate trend slope
+  trendSlope = (TREND_WINDOW * sumXY - sumX * sumY) / (TREND_WINDOW * sumX2 - sumX * sumX);
+  
+  // Calculate prediction using weighted combination of:
+  // 1. Current value
+  // 2. Short-term trend
+  // 3. Long-term average
+  float currentValue = airQualityHistory[currentIndex];
+  float trendPrediction = currentValue + (trendSlope * (PREDICTION_WINDOW / 2000.0));  // Convert to number of 2-second intervals
+  
+  // Weight the predictions (adjust weights based on testing)
+  prediction = (0.4 * currentValue) + (0.4 * trendPrediction) + (0.2 * longTermAverage);
+  
+  // Ensure prediction stays within reasonable bounds
+  prediction = constrain(prediction, 0, 100);
+
+   predictedAirQuality = prediction;
+
+  
+  // Print prediction details for debugging
+  Serial.print("Current: ");
+  Serial.print(currentValue);
+  Serial.print(" Trend: ");
+  Serial.print(trendSlope);
+  Serial.print(" Predicted: ");
+  Serial.println(prediction);
+}
+
+
 void updateDisplay() {
   display.clearDisplay();
   display.setCursor(0, 0);
@@ -191,22 +301,27 @@ void updateDisplay() {
   
   // Temperature and Humidity
   display.setCursor(0, 15);
-  display.print("Temp: ");
+  display.print("Temp:");
   display.print(temperature);
   display.println(" C");
   
   display.setCursor(0, 25);
-  display.print("Humidity: ");
+  display.print("Hum:");
   display.print(humidity);
   display.println(" %");
   
-  // Air Quality
-  display.setCursor(0, 35);
-  display.print("Air Quality: ");
+  // Second column (right side)
+  display.setCursor(64, 15);
+  display.print("AQ:");
   display.print(airQuality);
-  display.println(" %");
+  display.println("%");
   
-  // Status text
+  display.setCursor(60, 25);
+  display.print("Pred:");
+  display.print(prediction, 1);  // Show only 1 decimal place
+  display.println("%");
+  
+   // Status line
   display.setCursor(0, 45);
   display.print("Status: ");
    // Convert percentage back to ppm for status check
@@ -257,27 +372,28 @@ void setRGBColor(int r, int g, int b) {
 void controlVentilation() {
     // Convert percentage back to ppm for ventilation control
   int tempAirQuality = map(airQuality, 0, 100, 400, 2000);
+  int predictedQuality = map(prediction, 0, 100, 400, 2000);
   
+  // Use weighted combination of current and predicted values
+  float weightedQuality = (0.7 * tempAirQuality) + (0.3 * predictedQuality);
+
   // Hysteresis control for ventilation
-  if (tempAirQuality > AIR_QUALITY_GOOD && !ventilationStatus) {
-    // Turn on ventilation if air quality is above good
+  if (weightedQuality > AIR_QUALITY_GOOD && !ventilationStatus) {
+    // Turn on ventilation if weighted quality is above good
     ventilationStatus = true;
     digitalWrite(RELAY_PIN, HIGH);
-    Serial.println("Ventilation activated");
+    Serial.println("Ventilation activated (based on weighted quality)");
     
-    // Set speed based on how poor the air quality is
-    if (tempAirQuality > AIR_QUALITY_MODERATE + 200) {
+    // Set initial speed based on weighted quality
+    if (weightedQuality > 1200) {  // Changed to 1200 for high speed
       ventilationSpeed = "high";
-      Serial.println("Ventilation speed set to high");
-    } else if (tempAirQuality > AIR_QUALITY_GOOD + 100) {
-      ventilationSpeed = "medium";
-            Serial.println("Ventilation speed set to medium");
+    Serial.println("Ventilation speed set to high");
     } else {
-      ventilationSpeed = "low";
-      Serial.println("Ventilation speed set to low");
+      ventilationSpeed = "medium";
+      Serial.println("Ventilation speed set to medium");
     }
   } 
-  else if (tempAirQuality <= AIR_QUALITY_GOOD - 50 && ventilationStatus) {
+  else if (weightedQuality <= AIR_QUALITY_GOOD - 50 && ventilationStatus) {
     // Turn off ventilation if air quality has improved enough
     ventilationStatus = false;
     ventilationSpeed = "off";
@@ -288,27 +404,25 @@ void controlVentilation() {
     // Add hysteresis to speed changes
     static int lastSpeedChange = 0;
     if (millis() - lastSpeedChange > 10000) {  // Only change speed every 10 seconds
-      if (tempAirQuality > AIR_QUALITY_MODERATE + 200) {
+      String newSpeed = ventilationSpeed;  // Store current speed before potential change
+ 
+      if (weightedQuality > 1200) {  // Changed to 1200 for high speed
         if (ventilationSpeed != "high") {
           ventilationSpeed = "high";
           Serial.println("Ventilation speed set to high");
           lastSpeedChange = millis();
         }
       } 
-      else if (tempAirQuality > AIR_QUALITY_GOOD + 100) {
+      else {
         if (ventilationSpeed != "medium") {
           ventilationSpeed = "medium";
           Serial.println("Ventilation speed set to medium");
           lastSpeedChange = millis();
         }
       }
-      else {
-        if (ventilationSpeed != "low") {
-          ventilationSpeed = "low";
-          Serial.println("Ventilation speed set to low");
-          lastSpeedChange = millis();
-        }
-      }
+            
+      // Update previous speed after potential change
+      previousVentilationSpeed = newSpeed;
     }
   }
 }
@@ -321,6 +435,19 @@ void onVentilationStatusChange() {
 }
 
 void onVentilationSpeedChange() {
-  Serial.print("Ventilation speed changed to: ");
-  Serial.println(ventilationSpeed);
+  //Serial.print("Ventilation speed changed to: ");
+  //Serial.println(ventilationSpeed);
+    // Check if speed changed from medium to high
+  if (ventilationSpeed == "high" && previousVentilationSpeed == "medium") {
+    // This will trigger the notification in Arduino IoT Cloud
+    Serial.println("⚠️ AIR QUALITY IS POOR! Ventilation increased to high speed.");
+  }
+  // Check if speed changed from high to low
+  else if (ventilationSpeed == "medium" && previousVentilationSpeed == "high") {
+    // This will trigger the notification in Arduino IoT Cloud
+    Serial.println("✅ AIR QUALITY IS NORMAL! Ventilation reduced to low speed.");
+  }
+  
+  // Update previous speed
+  previousVentilationSpeed = ventilationSpeed;
 }

@@ -13,6 +13,7 @@ void onVentilationSpeedChange();
 void onVentilationStatusChange();
 
 String ventilationSpeed;
+float predictedAirQuality;
 int airQuality;
 int humidity;
 int temperature;
@@ -23,6 +24,7 @@ void initProperties(){
   ArduinoCloud.setBoardId(DEVICE_LOGIN_NAME);
   ArduinoCloud.setSecretDeviceKey(DEVICE_KEY);
   ArduinoCloud.addProperty(ventilationSpeed, READWRITE, ON_CHANGE, onVentilationSpeedChange);
+  ArduinoCloud.addProperty(predictedAirQuality, READ, ON_CHANGE, NULL);
   ArduinoCloud.addProperty(airQuality, READ, ON_CHANGE, NULL);
   ArduinoCloud.addProperty(humidity, READ, ON_CHANGE, NULL);
   ArduinoCloud.addProperty(temperature, READ, ON_CHANGE, NULL);

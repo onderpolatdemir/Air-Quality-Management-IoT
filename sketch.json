@@ -1,6 +1,6 @@
 {
   "cpu": {
-    "fqbn": "esp32:esp32:esp32doit-devkit-v1:UploadSpeed=921600,FlashFreq=80,DebugLevel=none,EraseFlash=none",
+    "fqbn": "esp32:esp32:esp32doit-devkit-v1",
     "name": "",
     "type": "serial"
   },
