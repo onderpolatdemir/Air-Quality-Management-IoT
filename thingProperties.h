@@ -3,7 +3,7 @@
 #include <ArduinoIoTCloud.h>
 #include <Arduino_ConnectionHandler.h>
 
-const char DEVICE_LOGIN_NAME[]  = ""; //device login name
+const char DEVICE_LOGIN_NAME[]  = "7e65a558-80bb-4ae9-84e6-75b8cdf81d77";
 
 const char SSID[]               = SECRET_SSID;    // Network SSID (name)
 const char PASS[]               = SECRET_OPTIONAL_PASS;    // Network password (use for WPA, or use as key for WEP)
@@ -12,6 +12,7 @@ const char DEVICE_KEY[]  = SECRET_DEVICE_KEY;    // Secret device password
 void onVentilationSpeedChange();
 void onVentilationStatusChange();
 
+String airQualityStatus;
 String ventilationSpeed;
 float predictedAirQuality;
 int airQuality;
@@ -29,6 +30,7 @@ void initProperties(){
   ArduinoCloud.addProperty(humidity, READ, ON_CHANGE, NULL);
   ArduinoCloud.addProperty(temperature, READ, ON_CHANGE, NULL);
   ArduinoCloud.addProperty(ventilationStatus, READWRITE, ON_CHANGE, onVentilationStatusChange);
+  ArduinoCloud.addProperty(airQualityStatus, READ, ON_CHANGE, NULL);
 
 }
 
