@@ -1,58 +1,52 @@
-:Author: onderpltdmmr
-:Email:
-:Date: 16/05/2025
-:Revision: version#
-:License: Public Domain
+# 🌬️ Smart Air Quality Monitoring and Ventilation Control System with ESP32 & Arduino Cloud
 
-= Project: {Project}
+This project uses an **ESP32 DevKit** and an **MQ135 air quality sensor** to monitor and predict air quality. It intelligently controls a ventilation system via a relay based on both **real-time and predicted PPM levels**. The system also syncs with **Arduino IoT Cloud** for remote monitoring and data logging.
 
-Describe your project
+## 📡 Features
 
-== Step 1: Installation
-Please describe the steps to install this project.
+- 📊 Real-time air quality monitoring with MQ135.
+- 🧠 Basic machine learning (linear regression) for PPM prediction.
+- 🌀 Ventilation control (low, medium, high) via relay.
+- ☁️ Arduino IoT Cloud integration for remote dashboard access.
+- 🕒 Anti-flicker logic to avoid frequent relay switching.
 
-For example:
+## 🔧 Hardware Used
 
-1. Open this file
-2. Edit as you like
-3. Release to the World!
+- ESP32 DOIT ESP32 DEVKIT V1
+- MQ135 Gas Sensor
+- DHT11
+- RGB LED Module
+- Relay Module (5V or 3.3V compatible)
+- Jumper Wires
+- Optional: Fan or motor for demo ventilation
 
-== Step 2: Assemble the circuit
+## ☁️ Arduino Cloud Integration
 
-Assemble the circuit following the diagram layout.png attached to the sketch
+This project is linked to **Arduino IoT Cloud** for real-time monitoring. You can:
 
-== Step 3: Load the code
+- View current PPM values
+- See predicted air quality trends
+- Check ventilation status (ON/OFF, speed)
+- Remotely manage or expand the system
 
-Upload the code contained in this sketch on to your board
+### Cloud Variables Used
 
-=== Folder structure
-
-....
- sketch123                => Arduino sketch folder
-  ├── sketch123.ino       => main Arduino file
-  ├── schematics.png      => (optional) an image of the required schematics
-  ├── layout.png          => (optional) an image of the layout
-  └── ReadMe.adoc         => this file
-....
-
-=== License
-This project is released under a {License} License.
-
-=== Contributing
-To contribute to this project please contact: 
-
-=== BOM
-Add the bill of the materials you need for this project.
-
-|===
-| ID | Part name      | Part number | Quantity
-| R1 | 10k Resistor   | 1234-abcd   | 10       
-| L1 | Red LED        | 2345-asdf   | 5        
-| A1 | Arduino Zero   | ABX00066    | 1        
-|===
+- `airQualityPPM` (float)
+- `predictedPPM` (float)
+- `ventilationStatus` (String)
+- `ventilationSpeed` (String)
+- `temperature` (integer)
+- `humidity` (integer)
 
 
-=== Help
-This document is written in the _AsciiDoc_ format, a markup language to describe documents. 
-If you need help you can search the http://www.methods.co.nz/asciidoc[AsciiDoc homepage]
-or consult the http://powerman.name/doc/asciidoc[AsciiDoc cheatsheet]
+## 🧠 How It Works
+
+1. **Measure**: MQ135 provides analog gas sensor data.
+2. **Calculate**: Analog value is converted to estimated PPM.
+3. **Store**: Readings are added to a sliding window for regression.
+4. **Predict**: Linear regression is applied to predict future PPM.
+5. **Control**: Based on current and predicted values:
+   - Ventilation is activated/deactivated via relay.
+   - Speed is set: low, medium, or high.
+6. **Sync**: Data is published to Arduino IoT Cloud.
+
